@@ -1,48 +1,43 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from transformers import BertTokenizer, BertModel
+from transformers import BertTokenizer, BertForSequenceClassification
+from sklearn.model_selection import train_test_split
+from sklearn.datasets import fetch_20newsgroups
 
-class SimpleBertClassifier(nn.Module):
-    """A simple classifier using BERT for text classification."""
-    def __init__(self, num_classes):
-        super(SimpleBertClassifier, self).__init__()
-        self.bert = BertModel.from_pretrained('bert-base-uncased')
-        self.fc = nn.Linear(self.bert.config.hidden_size, num_classes)
+class TextClassifier:
+    def __init__(self, model_name='bert-base-uncased', num_labels=20):
+        self.tokenizer = BertTokenizer.from_pretrained(model_name)
+        self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=2e-5)
 
-    def forward(self, input_ids, attention_mask):
-        """Forward pass through BERT and the classifier."""
-        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        logits = self.fc(outputs.pooler_output)
-        return logits
+    def preprocess_data(self, texts):
+        return self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt')
 
-def preprocess_data(texts, tokenizer, max_length):
-    """Tokenizes and prepares input data for BERT model."""
-    encodings = tokenizer(texts, truncation=True, padding=True, max_length=max_length, return_tensors='pt')
-    return encodings['input_ids'], encodings['attention_mask']
-
-def train_model(model, dataloader, optimizer, device, epochs):
-    """Trains the BERT classifier on the provided data."""
-    model.train()
-    for epoch in range(epochs):
-        for input_ids, attention_mask, labels in dataloader:
-            input_ids, attention_mask, labels = input_ids.to(device), attention_mask.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(input_ids, attention_mask)
-            loss = nn.CrossEntropyLoss()(outputs, labels)
+    def train(self, texts, labels, epochs=3):
+        self.model.train()
+        for epoch in range(epochs):
+            inputs = self.preprocess_data(texts)
+            outputs = self.model(**inputs, labels=labels)
+            loss = outputs.loss
+            self.optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
-            print(f'Epoch: {epoch + 1}, Loss: {loss.item()}')
+            self.optimizer.step()
+            print(f'Epoch {epoch + 1}/{epochs}, Loss: {loss.item()}')
+
+    def predict(self, texts):
+        self.model.eval()
+        inputs = self.preprocess_data(texts)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+        return torch.argmax(outputs.logits, dim=1).tolist()
 
 if __name__ == '__main__':
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    model = SimpleBertClassifier(num_classes=2).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=5e-5)
-    texts = ['I love programming.', 'I hate bugs.']
-    labels = torch.tensor([1, 0]).unsqueeze(1)
-    input_ids, attention_mask = preprocess_data(texts, tokenizer, max_length=10)
-    dataset = torch.utils.data.TensorDataset(input_ids, attention_mask, labels)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=2)
-    train_model(model, dataloader, optimizer, device, epochs=3)
-    print('Training complete.')
+    data = fetch_20newsgroups(subset='all')
+    texts = data.data[:100]
+    labels = data.target[:100]
+    train_texts, val_texts, train_labels, val_labels = train_test_split(texts, labels, test_size=0.2)
+    classifier = TextClassifier()
+    classifier.train(train_texts, torch.tensor(train_labels))
+    predictions = classifier.predict(val_texts)
+    print(predictions)
