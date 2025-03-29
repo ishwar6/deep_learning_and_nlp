@@ -5,11 +5,32 @@ from torch.utils.data import DataLoader, Dataset
 from sklearn.model_selection import train_test_split
 import numpy as np
 
-class SimpleDataset(Dataset):
-    """Custom Dataset for loading example data."""
-    def __init__(self, data, labels):
-        self.data = data
-        self.labels = labels
+class SimpleNN(nn.Module):
+    """
+    A simple feedforward neural network.
+    """
+    def __init__(self, input_size, hidden_size, output_size):
+        super(SimpleNN, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, output_size)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        """
+        Forward pass through the network.
+        """ 
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        return x
+
+class RandomDataset(Dataset):
+    """
+    A dataset that returns random data points and labels.
+    """ 
+    def __init__(self, num_samples, input_size):
+        self.data = np.random.rand(num_samples, input_size).astype(np.float32)
+        self.labels = np.random.randint(0, 2, size=(num_samples,)).astype(np.long)
 
     def __len__(self):
         return len(self.data)
@@ -17,39 +38,33 @@ class SimpleDataset(Dataset):
     def __getitem__(self, idx):
         return self.data[idx], self.labels[idx]
 
-class SimpleNN(nn.Module):
-    """A simple feedforward neural network."""
-    def __init__(self, input_size, hidden_size, output_size):
-        super(SimpleNN, self).__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, output_size)
-
-    def forward(self, x):
-        out = self.fc1(x)
-        out = self.relu(out)
-        return self.fc2(out)
-
-def train_model(model, train_loader, criterion, optimizer, num_epochs):
-    """Train the neural network model."""
+def train_model(model, dataloader, criterion, optimizer, num_epochs=5):
+    """
+    Train the neural network model.
+    """ 
     for epoch in range(num_epochs):
-        for inputs, labels in train_loader:
+        total_loss = 0
+        for inputs, labels in dataloader:
             optimizer.zero_grad()
-            outputs = model(inputs.float())
-            loss = criterion(outputs, labels.float())
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+            total_loss += loss.item()
+        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(dataloader)}')
 
 if __name__ == '__main__':
-    np.random.seed(0)
-    data = np.random.rand(100, 10)
-    labels = (np.random.rand(100) > 0.5).astype(float)
-    train_data, val_data, train_labels, val_labels = train_test_split(data, labels, test_size=0.2)
-    train_dataset = SimpleDataset(train_data, train_labels)
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    model = SimpleNN(input_size=10, hidden_size=5, output_size=1)
-    criterion = nn.BCEWithLogitsLoss()
+    input_size = 10
+    hidden_size = 5
+    output_size = 2
+    num_samples = 100
+    num_epochs = 10
+    batch_size = 16
+
+    dataset = RandomDataset(num_samples, input_size)
+    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    model = SimpleNN(input_size, hidden_size, output_size)
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    train_model(model, train_loader, criterion, optimizer, num_epochs=10)
-    print('Training complete')
+    train_model(model, train_loader, criterion, optimizer, num_epochs)
+    print('Training complete.')
