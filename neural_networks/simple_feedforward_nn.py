@@ -2,10 +2,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
+from sklearn.model_selection import train_test_split
 import numpy as np
 
 class SimpleDataset(Dataset):
-    """Custom dataset for demonstration purposes."""
+    """Custom Dataset for loading example data."""
     def __init__(self, data, labels):
         self.data = data
         self.labels = labels
@@ -17,36 +18,38 @@ class SimpleDataset(Dataset):
         return self.data[idx], self.labels[idx]
 
 class SimpleNN(nn.Module):
-    """A simple feedforward neural network with two layers."""
-    def __init__(self):
+    """A simple feedforward neural network."""
+    def __init__(self, input_size, hidden_size, output_size):
         super(SimpleNN, self).__init__()
-        self.fc1 = nn.Linear(10, 20)
-        self.fc2 = nn.Linear(20, 1)
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        return self.fc2(x)
+        out = self.fc1(x)
+        out = self.relu(out)
+        return self.fc2(out)
 
-def train_model(model, dataloader, criterion, optimizer, epochs=5):
+def train_model(model, train_loader, criterion, optimizer, num_epochs):
     """Train the neural network model."""
-    model.train()
-    for epoch in range(epochs):
-        for inputs, labels in dataloader:
+    for epoch in range(num_epochs):
+        for inputs, labels in train_loader:
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels.view(-1, 1))
+            outputs = model(inputs.float())
+            loss = criterion(outputs, labels.float())
             loss.backward()
             optimizer.step()
-        print(f'Epoch {epoch+1}, Loss: {loss.item():.4f}')
+        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
 
 if __name__ == '__main__':
-    np.random.seed(42)
-    torch.manual_seed(42)
-    mock_data = np.random.rand(100, 10).astype(np.float32)
-    mock_labels = np.random.rand(100).astype(np.float32)
-    dataset = SimpleDataset(mock_data, mock_labels)
-    dataloader = DataLoader(dataset, batch_size=10, shuffle=True)
-    model = SimpleNN()
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
-    train_model(model, dataloader, criterion, optimizer, epochs=5)
+    np.random.seed(0)
+    data = np.random.rand(100, 10)
+    labels = (np.random.rand(100) > 0.5).astype(float)
+    train_data, val_data, train_labels, val_labels = train_test_split(data, labels, test_size=0.2)
+    train_dataset = SimpleDataset(train_data, train_labels)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    model = SimpleNN(input_size=10, hidden_size=5, output_size=1)
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    train_model(model, train_loader, criterion, optimizer, num_epochs=10)
+    print('Training complete')
