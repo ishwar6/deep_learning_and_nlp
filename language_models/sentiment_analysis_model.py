@@ -1,53 +1,45 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from transformers import BertTokenizer, BertForSequenceClassification, Trainer, TrainingArguments
+from transformers import BertTokenizer, BertModel
 
-class SentimentAnalysisModel:
-    def __init__(self, model_name='bert-base-uncased', num_labels=2):
-        """Initializes the sentiment analysis model with BERT."""
-        self.tokenizer = BertTokenizer.from_pretrained(model_name)
-        self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
+def load_data(sentences):
+    """Tokenizes input sentences and returns input IDs and attention masks."""
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    encoding = tokenizer(sentences, return_tensors='pt', padding=True, truncation=True)
+    return encoding['input_ids'], encoding['attention_mask']
 
-    def preprocess_data(self, texts, labels, max_length=128):
-        """Tokenizes the input texts and prepares them for training."""
-        encodings = self.tokenizer(texts, truncation=True, padding=True, max_length=max_length)
-        return encodings, labels
+class SentimentModel(nn.Module):
+    """Defines a simple sentiment analysis model using BERT."""
+    def __init__(self):
+        super(SentimentModel, self).__init__()
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.dropout = nn.Dropout(0.3)
+        self.fc = nn.Linear(self.bert.config.hidden_size, 1)
 
-    def train(self, texts, labels, epochs=3, batch_size=16):
-        """Trains the sentiment analysis model on the provided texts and labels."""
-        encodings, labels = self.preprocess_data(texts, labels)
-        dataset = torch.utils.data.TensorDataset(torch.tensor(encodings['input_ids']), 
-                                                 torch.tensor(encodings['attention_mask']), 
-                                                 torch.tensor(labels))
-        training_args = TrainingArguments(
-            output_dir='./results',
-            num_train_epochs=epochs,
-            per_device_train_batch_size=batch_size,
-            logging_dir='./logs',
-            logging_steps=10,
-        )
-        trainer = Trainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=dataset
-        )
-        trainer.train()
+    def forward(self, input_ids, attention_mask):
+        """Forward pass through the model."""
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        pooled_output = outputs[1]
+        output = self.dropout(pooled_output)
+        return self.fc(output)
 
-    def predict(self, texts):
-        """Predicts the sentiment for a given list of texts."""
-        self.model.eval()
-        encodings = self.tokenizer(texts, truncation=True, padding=True, return_tensors='pt')
-        with torch.no_grad():
-            outputs = self.model(**encodings)
-        logits = outputs.logits
-        predictions = torch.argmax(logits, dim=-1)
-        return predictions.numpy()  
+def train_model(model, input_ids, attention_mask, labels, epochs=3, lr=1e-5):
+    """Trains the sentiment model on the provided data."""
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.BCEWithLogitsLoss()
+    model.train()
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        outputs = model(input_ids, attention_mask)
+        loss = criterion(outputs.squeeze(), labels.float())
+        loss.backward()
+        optimizer.step()
+        print(f'Epoch {epoch+1}/{epochs}, Loss: {loss.item():.4f}')
 
 if __name__ == '__main__':
-    model = SentimentAnalysisModel()
-    sample_texts = ['I love this!', 'This is terrible.']
-    sample_labels = [1, 0]
-    model.train(sample_texts, sample_labels)
-    predictions = model.predict(sample_texts)
-    print(predictions)
+    sentences = ["I love this product!", "This is the worst experience I ever had."]
+    labels = torch.tensor([1, 0])
+    input_ids, attention_mask = load_data(sentences)
+    model = SentimentModel()
+    train_model(model, input_ids, attention_mask, labels)
