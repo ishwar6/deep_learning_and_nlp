@@ -3,41 +3,27 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SimpleAttention(nn.Module):
-    """
-    Implements a simple scaled dot-product attention mechanism.
-    """
-    def __init__(self, d_model):
+    """Implements a simple attention mechanism based on dot-product attention."""
+    def __init__(self):
         super(SimpleAttention, self).__init__()
-        self.d_model = d_model
-        self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, queries, keys, values):
-        """
-        Compute the attention scores and apply them to values.
-        
-        Args:
-            queries: Tensor of shape (batch_size, num_queries, d_model)
-            keys: Tensor of shape (batch_size, num_keys, d_model)
-            values: Tensor of shape (batch_size, num_keys, d_model)
-        
-        Returns:
-            Attention output tensor of shape (batch_size, num_queries, d_model)
-        """
-        scores = torch.matmul(queries, keys.transpose(-2, -1)) / (self.d_model ** 0.5)
-        attention_weights = self.softmax(scores)
-        output = torch.matmul(attention_weights, values)
-        return output
+    def forward(self, query, key, value):
+        """Calculates attention scores and outputs weighted values."""
+        scores = torch.matmul(query, key.transpose(-2, -1))
+        attention_weights = F.softmax(scores, dim=-1)
+        output = torch.matmul(attention_weights, value)
+        return output, attention_weights
 
-# Mock data for testing the attention mechanism
+# Simulating data
 batch_size = 2
-num_queries = 3
-num_keys = 4
-d_model = 5
-queries = torch.rand(batch_size, num_queries, d_model)
-keys = torch.rand(batch_size, num_keys, d_model)
-values = torch.rand(batch_size, num_keys, d_model)
+seq_length = 3
+embedding_dim = 4
+query = torch.rand(batch_size, seq_length, embedding_dim)
+key = torch.rand(batch_size, seq_length, embedding_dim)
+value = torch.rand(batch_size, seq_length, embedding_dim)
 
-# Initialize and run the attention layer
-attention_layer = SimpleAttention(d_model)
-output = attention_layer(queries, keys, values)
-print("Attention output:\n", output)
+# Using the attention mechanism
+attention_layer = SimpleAttention()
+output, attention_weights = attention_layer(query, key, value)
+print("Output:", output)
+print("Attention Weights:", attention_weights)
