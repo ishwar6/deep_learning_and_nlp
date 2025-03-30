@@ -1,10 +1,8 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.datasets import fetch_20newsgroups
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import CountVectorizer
+from torchtext.data import Field, TabularDataset, BucketIterator
+from torchtext.vocab import GloVe
 
 class WordEmbeddingModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim):
@@ -14,34 +12,30 @@ class WordEmbeddingModel(nn.Module):
     def forward(self, input):
         return self.embeddings(input)
 
-def preprocess_data():
-    newsgroups = fetch_20newsgroups(subset='all')
-    vectorizer = CountVectorizer()
-    X = vectorizer.fit_transform(newsgroups.data)
-    y = newsgroups.target
-    return train_test_split(X, y, test_size=0.2, random_state=42), vectorizer
+def load_data(file_path):
+    text_field = Field(tokenize='spacy', lower=True)
+    fields = {'text': ('text', text_field)}
+    dataset = TabularDataset(path=file_path, format='csv', fields=fields)
+    return dataset, text_field
 
-def train_model(X_train, y_train, vocab_size, embedding_dim=50, epochs=5):
-    model = WordEmbeddingModel(vocab_size, embedding_dim)
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
-    loss_function = nn.CrossEntropyLoss()
+def train_model(dataset, text_field, embedding_dim=100, epochs=5):
+    text_field.build_vocab(dataset, vectors=GloVe(name='6B', dim=embedding_dim))
+    model = WordEmbeddingModel(len(text_field.vocab), embedding_dim)
+    optimizer = optim.Adam(model.parameters())
+    criterion = nn.CrossEntropyLoss()
+    model.train()
     for epoch in range(epochs):
-        model.train()
-        total_loss = 0
-        for i in range(len(X_train.toarray())):
-            inputs = torch.tensor(X_train[i].toarray(), dtype=torch.float32).view(-1)
-            target = torch.tensor([y_train[i]], dtype=torch.long)
+        for batch in BucketIterator(dataset, batch_size=32):
             optimizer.zero_grad()
-            output = model(inputs.long())
-            loss = loss_function(output.view(1, -1), target)
+            text_indices = batch.text[0]
+            output = model(text_indices)
+            loss = criterion(output.view(-1, len(text_field.vocab)), text_indices.view(-1))
             loss.backward()
             optimizer.step()
-            total_loss += loss.item()
-        print(f'Epoch {epoch + 1}, Loss: {total_loss}')
     return model
 
 if __name__ == '__main__':
-    (X_train, X_test, y_train, y_test), vectorizer = preprocess_data()
-    vocab_size = len(vectorizer.vocabulary_)
-    model = train_model(X_train, y_train, vocab_size)
-    print('Training complete. Model ready for inference.')
+    dataset, text_field = load_data('sample_data.csv')
+    model = train_model(dataset, text_field)
+    print('Training complete. Model summary:')
+    print(model)
