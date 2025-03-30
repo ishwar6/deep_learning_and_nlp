@@ -2,54 +2,52 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
-from transformers import BertTokenizer, BertForSequenceClassification
+from transformers import BertTokenizer, BertModel
 
 class SentimentDataset(Dataset):
-    """Custom dataset for sentiment analysis using text data."""
     def __init__(self, texts, labels):
         self.texts = texts
         self.labels = labels
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     def __len__(self):
-        return len(self.texts)
+        return len(self.labels)
 
     def __getitem__(self, idx):
-        text = self.texts[idx]
-        label = self.labels[idx]
-        inputs = self.tokenizer(text, padding='max_length', truncation=True, return_tensors='pt')
-        return inputs['input_ids'].squeeze(), inputs['attention_mask'].squeeze(), label
+        encoding = self.tokenizer(self.texts[idx], return_tensors='pt', padding=True, truncation=True, max_length=128)
+        return encoding['input_ids'].squeeze(), encoding['attention_mask'].squeeze(), self.labels[idx]
 
-class SentimentAnalyzer:
-    """Sentiment analysis model using BERT architecture."""
-    def __init__(self, num_classes):
-        self.model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=num_classes)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=1e-5)
+class SentimentModel(nn.Module):
+    def __init__(self):
+        super(SentimentModel, self).__init__()
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.classifier = nn.Linear(self.bert.config.hidden_size, 1)
 
-    def train(self, dataloader, epochs):
-        self.model.train()
-        for epoch in range(epochs):
-            for batch in dataloader:
-                input_ids, attention_mask, labels = batch
-                self.optimizer.zero_grad()
-                outputs = self.model(input_ids, attention_mask=attention_mask, labels=labels)
-                loss = outputs.loss
-                loss.backward()
-                self.optimizer.step()
-            print(f'Epoch {epoch + 1}/{epochs}, Loss: {loss.item()}')
+    def forward(self, input_ids, attention_mask):
+        outputs = self.bert(input_ids, attention_mask=attention_mask)
+        pooled_output = outputs.pooler_output
+        return self.classifier(pooled_output)
 
-    def predict(self, text):
-        self.model.eval()
-        inputs = self.model.tokenizer(text, return_tensors='pt', padding=True, truncation=True)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-        return torch.argmax(outputs.logits, dim=1).item()
+def train_model(model, dataset, epochs=3, batch_size=16):
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    loss_fn = nn.BCEWithLogitsLoss()
+    model.train()
 
-if __name__ == '__main__':
-    texts = ['I love this!', 'This is awful.', 'Absolutely fantastic!']
-    labels = [1, 0, 1]
-    dataset = SentimentDataset(texts, labels)
-    dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
-    sentiment_analyzer = SentimentAnalyzer(num_classes=2)
-    sentiment_analyzer.train(dataloader, epochs=3)
-    print(sentiment_analyzer.predict('I hate this!'))
+    for epoch in range(epochs):
+        total_loss = 0
+        for input_ids, attention_mask, labels in dataloader:
+            optimizer.zero_grad()
+            outputs = model(input_ids, attention_mask)
+            loss = loss_fn(outputs.squeeze(), labels.float())
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        print(f'Epoch {epoch + 1}/{epochs}, Loss: {total_loss / len(dataloader)}')
+
+texts = ['I love this product!', 'This is the worst experience ever.']
+labels = [1, 0]
+
+dataset = SentimentDataset(texts, labels)
+model = SentimentModel()
+train_model(model, dataset)
