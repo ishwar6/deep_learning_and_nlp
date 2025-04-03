@@ -1,55 +1,46 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
+from sklearn.datasets import fetch_20newsgroups
 from sklearn.model_selection import train_test_split
-
-class SimpleDataset(Dataset):
-    """Custom dataset for loading text data and labels."""
-    def __init__(self, texts, labels):
-        self.texts = texts
-        self.labels = labels
-
-    def __len__(self):
-        return len(self.texts)
-
-    def __getitem__(self, idx):
-        return self.texts[idx], self.labels[idx]
+from sklearn.feature_extraction.text import CountVectorizer
 
 class SimpleNN(nn.Module):
-    """A simple feedforward neural network for text classification."""
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, num_classes):
         super(SimpleNN, self).__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, output_size)
+        self.fc = nn.Linear(input_size, num_classes)
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        return x
+        return self.fc(x)
 
-def train_model(model, train_loader, criterion, optimizer, num_epochs=5):
-    """Train the neural network model."""
+def preprocess_data():
+    data = fetch_20newsgroups(subset='all')
+    vectorizer = CountVectorizer()
+    X = vectorizer.fit_transform(data.data).toarray()
+    y = data.target
+    return train_test_split(X, y, test_size=0.2, random_state=42)
+
+def train_model(model, train_loader, criterion, optimizer, epochs=10):
     model.train()
-    for epoch in range(num_epochs):
-        for texts, labels in train_loader:
+    for epoch in range(epochs):
+        for inputs, labels in train_loader:
             optimizer.zero_grad()
-            outputs = model(texts.float())
+            outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+        print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
 
-if __name__ == '__main__':
-    texts = torch.randn(100, 10)  # 100 samples, 10 features each
-    labels = torch.randint(0, 2, (100,))  # Binary labels
-    train_texts, val_texts, train_labels, val_labels = train_test_split(texts, labels, test_size=0.2)
-    train_dataset = SimpleDataset(train_texts, train_labels)
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-    model = SimpleNN(input_size=10, hidden_size=5, output_size=2)
+def main():
+    X_train, X_test, y_train, y_test = preprocess_data()
+    input_size = X_train.shape[1]
+    num_classes = len(set(y_train))
+    model = SimpleNN(input_size, num_classes)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
+    train_loader = torch.utils.data.DataLoader(list(zip(torch.FloatTensor(X_train), torch.LongTensor(y_train))), batch_size=32)
     train_model(model, train_loader, criterion, optimizer)
     print('Training complete.')
+
+if __name__ == '__main__':
+    main()
