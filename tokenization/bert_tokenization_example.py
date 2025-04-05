@@ -1,26 +1,28 @@
 from transformers import BertTokenizer, BertModel
 import torch
 
-class TokenizationExample:
+class TextTokenizer:
     def __init__(self, model_name='bert-base-uncased'):
         """Initializes the tokenizer and model."""
         self.tokenizer = BertTokenizer.from_pretrained(model_name)
         self.model = BertModel.from_pretrained(model_name)
 
-    def tokenize_input(self, text):
-        """Tokenizes the input text and returns input IDs and attention masks."""
-        inputs = self.tokenizer(text, return_tensors='pt', padding=True, truncation=True)
-        return inputs['input_ids'], inputs['attention_mask']
+    def tokenize(self, text):
+        """Tokenizes input text and returns input IDs and attention mask."""
+        encoding = self.tokenizer(text, return_tensors='pt')
+        return encoding['input_ids'], encoding['attention_mask']
 
-    def get_embeddings(self, text):
-        """Generates embeddings for the input text using BERT model."""
-        input_ids, attention_mask = self.tokenize_input(text)
+    def get_embeddings(self, input_ids, attention_mask):
+        """Obtains embeddings for the given input IDs and attention mask."""
         with torch.no_grad():
             outputs = self.model(input_ids, attention_mask=attention_mask)
-        return outputs.last_hidden_state
+            return outputs.last_hidden_state
 
 if __name__ == '__main__':
-    example = TokenizationExample()
-    text = "Hello, how are you today?"
-    embeddings = example.get_embeddings(text)
-    print(embeddings.shape)
+    sample_text = 'Deep learning models are transforming education.'
+    tokenizer = TextTokenizer()
+    input_ids, attention_mask = tokenizer.tokenize(sample_text)
+    embeddings = tokenizer.get_embeddings(input_ids, attention_mask)
+    print('Input IDs:', input_ids)
+    print('Attention Mask:', attention_mask)
+    print('Embeddings Shape:', embeddings.shape)
