@@ -5,9 +5,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 
 class SimpleCNN(nn.Module):
-    """
-    A simple Convolutional Neural Network for image classification.
-    """
+    """A simple convolutional neural network for image classification."""
     def __init__(self):
         super(SimpleCNN, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
@@ -25,33 +23,24 @@ class SimpleCNN(nn.Module):
         x = self.fc2(x)
         return x
 
-def train(model, dataloader, criterion, optimizer, epochs=5):
-    """
-    Train the CNN model.
-    """
-    model.train()
-    for epoch in range(epochs):
-        running_loss = 0.0
-        for images, labels in dataloader:
+def train_model():
+    """Trains the CNN on the MNIST dataset."""
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+    train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+
+    model = SimpleCNN()
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    for epoch in range(3):
+        for images, labels in train_loader:
             optimizer.zero_grad()
             outputs = model(images)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
-        print(f'Epoch {epoch + 1}, Loss: {running_loss / len(dataloader):.4f}')
-
-def main():
-    """
-    Main function to execute training of SimpleCNN on MNIST dataset.
-    """
-    transform = transforms.Compose([transforms.ToTensor()])
-    train_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-    model = SimpleCNN()
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    train(model, train_loader, criterion, optimizer)
+        print(f'Epoch [{epoch + 1}/3], Loss: {loss.item():.4f}')
 
 if __name__ == '__main__':
-    main()
+    train_model()
