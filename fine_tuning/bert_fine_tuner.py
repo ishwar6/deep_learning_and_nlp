@@ -1,48 +1,39 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from transformers import BertTokenizer, BertForSequenceClassification, Trainer, TrainingArguments
+from transformers import BertTokenizer, BertForSequenceClassification
 from sklearn.model_selection import train_test_split
-from datasets import load_dataset
+from torch.utils.data import DataLoader, TensorDataset
 
-class FineTuner:
+class ModelFineTuner:
     def __init__(self, model_name, num_labels):
         self.tokenizer = BertTokenizer.from_pretrained(model_name)
         self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
 
-    def preprocess_data(self, texts, labels):
-        encodings = self.tokenizer(texts, truncation=True, padding=True)
-        return encodings, labels
+    def tokenize_data(self, texts, max_length=128):
+        return self.tokenizer(texts, padding='max_length', truncation=True, max_length=max_length, return_tensors='pt')
 
-    def fine_tune(self, train_encodings, train_labels, val_encodings, val_labels):
-        train_dataset = torch.utils.data.Dataset(train_encodings, train_labels)
-        val_dataset = torch.utils.data.Dataset(val_encodings, val_labels)
+    def create_data_loader(self, texts, labels, batch_size=16):
+        inputs = self.tokenize_data(texts)
+        dataset = TensorDataset(inputs['input_ids'], inputs['attention_mask'], torch.tensor(labels))
+        return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-        training_args = TrainingArguments(
-            output_dir='./results',
-            num_train_epochs=3,
-            per_device_train_batch_size=8,
-            per_device_eval_batch_size=8,
-            warmup_steps=500,
-            weight_decay=0.01,
-            logging_dir='./logs',
-        )
-
-        trainer = Trainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=val_dataset,
-        )
-
-        trainer.train()
-        return trainer
+    def train(self, train_texts, train_labels, epochs=3, batch_size=16):
+        train_loader = self.create_data_loader(train_texts, train_labels, batch_size)
+        optimizer = optim.AdamW(self.model.parameters(), lr=1e-5)
+        self.model.train()
+        for epoch in range(epochs):
+            for batch in train_loader:
+                optimizer.zero_grad()
+                input_ids, attention_mask, labels = batch
+                outputs = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+                loss = outputs.loss
+                loss.backward()
+                optimizer.step()
+            print(f'Epoch {epoch + 1}, Loss: {loss.item()}')
 
 if __name__ == '__main__':
-    dataset = load_dataset('imdb')
-    train_texts, val_texts, train_labels, val_labels = train_test_split(dataset['train']['text'], dataset['train']['label'], test_size=0.2)
-    ft = FineTuner('bert-base-uncased', num_labels=2)
-    train_encodings, train_labels = ft.preprocess_data(train_texts, train_labels)
-    val_encodings, val_labels = ft.preprocess_data(val_texts, val_labels)
-    trainer = ft.fine_tune(train_encodings, train_labels, val_encodings, val_labels)
-    print('Fine-tuning completed. Model saved.')
+    texts = ['I love programming.', 'Deep learning is fascinating!', 'Transformers are great for NLP.']
+    labels = [1, 1, 1]
+    fine_tuner = ModelFineTuner(model_name='bert-base-uncased', num_labels=2)
+    fine_tuner.train(texts, labels, epochs=2)
