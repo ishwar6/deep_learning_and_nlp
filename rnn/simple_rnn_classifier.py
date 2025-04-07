@@ -1,43 +1,45 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
 import numpy as np
 
-class RNNModel(nn.Module):
-    """
-    A simple RNN model for sequence classification.
-    """
+class SimpleRNN(nn.Module):
+    """A simple RNN model for sequence classification."""
     def __init__(self, input_size, hidden_size, output_size):
-        super(RNNModel, self).__init__()
+        super(SimpleRNN, self).__init__()
         self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
         rnn_out, _ = self.rnn(x)
-        output = self.fc(rnn_out[:, -1, :])
-        return output
+        out = self.fc(rnn_out[:, -1, :])
+        return out
 
-def generate_mock_data(seq_length, num_samples, input_size):
-    """
-    Generates mock data for RNN training.
-    """
-    X = np.random.rand(num_samples, seq_length, input_size).astype(np.float32)
-    y = np.random.randint(0, 2, size=(num_samples,)).astype(np.long)
-    return torch.from_numpy(X), torch.from_numpy(y)
+class RandomDataset(Dataset):
+    """Generates random data for training the RNN."""
+    def __init__(self, num_samples, seq_length, input_size):
+        self.data = torch.randn(num_samples, seq_length, input_size)
+        self.labels = torch.randint(0, 2, (num_samples,))
 
-def train_rnn_model(model, data_loader, criterion, optimizer, num_epochs):
-    """
-    Trains the RNN model with the provided data loader.
-    """
-    model.train()
-    for epoch in range(num_epochs):
-        for inputs, labels in data_loader:
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        return self.data[idx], self.labels[idx]
+
+def train_model(model, dataloader, epochs=5):
+    """Trains the RNN model on the provided data loader."""
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    for epoch in range(epochs):
+        for inputs, labels in dataloader:
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+        print(f'Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.4f}')
 
 if __name__ == '__main__':
     input_size = 10
@@ -45,13 +47,7 @@ if __name__ == '__main__':
     output_size = 2
     seq_length = 5
     num_samples = 100
-    num_epochs = 10
-
-    X, y = generate_mock_data(seq_length, num_samples, input_size)
-    data_loader = torch.utils.data.DataLoader(list(zip(X, y)), batch_size=16, shuffle=True)
-    model = RNNModel(input_size, hidden_size, output_size)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    train_rnn_model(model, data_loader, criterion, optimizer, num_epochs)
-    print('Training complete.')
+    dataset = RandomDataset(num_samples, seq_length, input_size)
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
+    model = SimpleRNN(input_size, hidden_size, output_size)
+    train_model(model, dataloader, epochs=3)
