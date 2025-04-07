@@ -12,7 +12,7 @@ class SimpleCNN(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.fc1 = nn.Linear(64 * 7 * 7, 128)
         self.fc2 = nn.Linear(128, 10)
-        self.pool = nn.MaxPool2d(2, 2)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -23,24 +23,26 @@ class SimpleCNN(nn.Module):
         x = self.fc2(x)
         return x
 
-def train_model():
-    """Trains the CNN on the MNIST dataset."""
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-    train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-
-    model = SimpleCNN()
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    for epoch in range(3):
+def train_model(model, train_loader, criterion, optimizer, epochs=5):
+    """Trains the CNN model on the given data loader."""
+    model.train()
+    for epoch in range(epochs):
+        running_loss = 0.0
         for images, labels in train_loader:
             optimizer.zero_grad()
             outputs = model(images)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-        print(f'Epoch [{epoch + 1}/3], Loss: {loss.item():.4f}')
+            running_loss += loss.item()
+        print(f'Epoch [{epoch + 1}/{epochs}], Loss: {running_loss / len(train_loader):.4f}')
 
 if __name__ == '__main__':
-    train_model()
+    transform = transforms.Compose([transforms.ToTensor()])
+    train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True)
+    model = SimpleCNN()
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    train_model(model, train_loader, criterion, optimizer, epochs=5)
+    print('Training complete.')
