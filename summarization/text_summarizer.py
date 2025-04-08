@@ -1,23 +1,21 @@
 import torch
-import torch.nn as nn
 from transformers import BartTokenizer, BartForConditionalGeneration
 
-class TextSummarizer:
-    def __init__(self, model_name='facebook/bart-large-cnn'):
-        """Initialize the TextSummarizer with a pre-trained BART model."""
-        self.tokenizer = BartTokenizer.from_pretrained(model_name)
-        self.model = BartForConditionalGeneration.from_pretrained(model_name)
+class Summarizer:
+    def __init__(self):
+        """Initializes the model and tokenizer for summarization."""
+        self.tokenizer = BartTokenizer.from_pretrained('facebook/bart-large')
+        self.model = BartForConditionalGeneration.from_pretrained('facebook/bart-large')
 
-    def summarize(self, text, max_length=130, min_length=30, length_penalty=2.0, num_beams=4):
-        """Generate a summary for the given text using BART model."""
-        inputs = self.tokenizer.encode(text, return_tensors='pt')
-        summary_ids = self.model.generate(inputs, max_length=max_length, min_length=min_length,
-                                           length_penalty=length_penalty, num_beams=num_beams,
-                                           early_stopping=True)
-        return self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    def summarize(self, text):
+        """Generates a summary for the given text."""
+        inputs = self.tokenizer.encode(text, return_tensors='pt', max_length=1024, truncation=True)
+        summary_ids = self.model.generate(inputs, max_length=150, min_length=40, length_penalty=2.0, num_beams=4, early_stopping=True)
+        summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+        return summary
 
 if __name__ == '__main__':
-    text = "Artificial Intelligence (AI) is intelligence demonstrated by machines, in contrast to the natural intelligence displayed by humans and animals. Leading AI textbooks define the field as the study of 'intelligent agents': any device that perceives its environment and takes actions that maximize its chance of successfully achieving its goals."
-    summarizer = TextSummarizer()
+    text = "Deep learning is a subset of machine learning that deals with neural networks. It has gained immense popularity due to its ability to analyze large amounts of data and produce powerful models for tasks like image recognition and natural language processing."
+    summarizer = Summarizer()
     summary = summarizer.summarize(text)
     print('Summary:', summary)
