@@ -12,7 +12,7 @@ class Chatbot:
 
     def generate_response(self, input_text):
         """Generates a response for the given input text using the GPT-2 model."""
-        inputs = self.tokenizer.encode(input_text + self.tokenizer.eos_token, return_tensors='pt')
+        inputs = self.tokenizer.encode(input_text, return_tensors='pt')
         with torch.no_grad():
             outputs = self.model.generate(inputs, max_length=50, num_return_sequences=1)
         response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -20,7 +20,6 @@ class Chatbot:
 
 if __name__ == '__main__':
     chatbot = Chatbot()
-    user_input = 'What is the capital of France?'
+    user_input = 'Hello, how are you today?'
     response = chatbot.generate_response(user_input)
-    print(f'User: {user_input}')
-    print(f'Chatbot: {response}')
+    print('Chatbot response:', response)
