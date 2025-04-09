@@ -10,21 +10,24 @@ class BertTextClassifier(nn.Module):
         self.classifier = nn.Linear(self.bert.config.hidden_size, num_classes)
 
     def forward(self, input_ids, attention_mask):
-        """Forward pass through BERT and classifier."""
+        """Forward pass through the model."""
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
         logits = self.classifier(outputs.pooler_output)
         return logits
 
 def preprocess_data(texts):
-    """Tokenizes and encodes the input texts."""
+    """Tokenizes input texts and creates attention masks."""
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    encodings = tokenizer(texts, truncation=True, padding=True, return_tensors='pt')
-    return encodings['input_ids'], encodings['attention_mask']
+    inputs = tokenizer(texts, padding=True, truncation=True, return_tensors='pt')
+    return inputs['input_ids'], inputs['attention_mask']
 
-if __name__ == '__main__':
-    sample_texts = ["Hello, how are you?", "Transformers are great for NLP tasks."]
-    input_ids, attention_mask = preprocess_data(sample_texts)
+def main():
+    texts = ['Hello, world!', 'BERT is a powerful model for NLP.']
+    input_ids, attention_mask = preprocess_data(texts)
     model = BertTextClassifier(num_classes=2)
     with torch.no_grad():
-        outputs = model(input_ids, attention_mask)
-        print(outputs)
+        logits = model(input_ids, attention_mask)
+        print(logits)
+
+if __name__ == '__main__':
+    main()
