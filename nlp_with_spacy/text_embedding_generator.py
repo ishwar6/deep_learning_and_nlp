@@ -1,34 +1,28 @@
 import spacy
 from spacy.tokens import Doc
+from transformers import DistilBertTokenizer, DistilBertModel
 import torch
-from transformers import BertTokenizer, BertModel
 
-class CustomTokenizer:
-    def __init__(self, model_name='bert-base-uncased'):
-        self.tokenizer = BertTokenizer.from_pretrained(model_name)
+class TextEmbedding:
+    def __init__(self, model_name='distilbert-base-uncased'):
+        """Initializes the TextEmbedding class with a specified transformer model."""
+        self.tokenizer = DistilBertTokenizer.from_pretrained(model_name)
+        self.model = DistilBertModel.from_pretrained(model_name)
 
-    def tokenize(self, text):
-        return self.tokenizer(text, return_tensors='pt')
-
-class TextEmbedder:
-    def __init__(self, model_name='bert-base-uncased'):
-        self.model = BertModel.from_pretrained(model_name)
-
-    def embed(self, tokens):
+    def embed_text(self, text):
+        """Embeds the input text using the transformer model and returns the embeddings."""
+        inputs = self.tokenizer(text, return_tensors='pt')
         with torch.no_grad():
-            outputs = self.model(**tokens)
-            return outputs.last_hidden_state
+            outputs = self.model(**inputs)
+        return outputs.last_hidden_state.mean(dim=1).squeeze().numpy()
 
-    def get_embedding(self, text):
-        tokens = self.tokenize(text)
-        embeddings = self.embed(tokens)
-        return embeddings.mean(dim=1).squeeze().numpy()
-
-    def print_embedding(self, text):
-        embedding = self.get_embedding(text)
-        print(f'Embedding for \'{text}\': {embedding})
+def main():
+    nlp = spacy.load('en_core_web_sm')
+    text = "Deep learning is transforming the field of natural language processing."
+    doc = nlp(text)
+    text_embedding = TextEmbedding()
+    embeddings = text_embedding.embed_text(doc.text)
+    print(f'Embeddings for the text: {embeddings}')
 
 if __name__ == '__main__':
-    text = 'Deep learning transforms NLP.'
-    embedder = TextEmbedder()
-    embedder.print_embedding(text)
+    main()
