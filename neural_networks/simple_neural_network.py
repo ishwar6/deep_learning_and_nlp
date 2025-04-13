@@ -2,11 +2,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
-from sklearn.model_selection import train_test_split
-import numpy as np
 
 class SimpleDataset(Dataset):
-    """Custom dataset for demonstration purposes."""
+    """Custom dataset for loading sample data."""
     def __init__(self, data, labels):
         self.data = data
         self.labels = labels
@@ -18,39 +16,35 @@ class SimpleDataset(Dataset):
         return self.data[idx], self.labels[idx]
 
 class SimpleNN(nn.Module):
-    """A simple feedforward neural network."""
+    """A simple neural network for binary classification."""
     def __init__(self):
         super(SimpleNN, self).__init__()
-        self.fc1 = nn.Linear(20, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 2)
-        self.relu = nn.ReLU()
+        self.fc1 = nn.Linear(10, 5)
+        self.fc2 = nn.Linear(5, 1)
 
     def forward(self, x):
-        x = self.relu(self.fc1(x))
-        x = self.relu(self.fc2(x))
-        return self.fc3(x)
+        x = torch.relu(self.fc1(x))
+        return torch.sigmoid(self.fc2(x))
 
 def train_model(model, dataloader, criterion, optimizer, epochs=5):
-    """Trains the neural network model."""
+    """Train the neural network model."""
     model.train()
     for epoch in range(epochs):
         for inputs, labels in dataloader:
             optimizer.zero_grad()
-            outputs = model(inputs.float())
-            loss = criterion(outputs, labels)
+            outputs = model(inputs)
+            loss = criterion(outputs, labels.float())
             loss.backward()
             optimizer.step()
-        print(f'Epoch {epoch+1}/{epochs}, Loss: {loss.item():.4f}')
+        print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
 
 if __name__ == '__main__':
-    np.random.seed(0)
-    data = np.random.rand(100, 20).astype(np.float32)
-    labels = np.random.randint(0, 2, size=(100,)).astype(np.long)
-    train_data, val_data, train_labels, val_labels = train_test_split(data, labels, test_size=0.2)
-    train_dataset = SimpleDataset(train_data, train_labels)
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    data = torch.rand(100, 10)
+    labels = (torch.sum(data, dim=1) > 5).long()
+    dataset = SimpleDataset(data, labels)
+    dataloader = DataLoader(dataset, batch_size=10, shuffle=True)
     model = SimpleNN()
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    train_model(model, train_loader, criterion, optimizer)
+    train_model(model, dataloader, criterion, optimizer, epochs=10)
+    print('Training complete.')
