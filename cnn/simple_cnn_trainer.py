@@ -5,14 +5,16 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 
 class SimpleCNN(nn.Module):
-    """A simple convolutional neural network for image classification."""
+    """
+    A simple Convolutional Neural Network for image classification.
+    """
     def __init__(self):
         super(SimpleCNN, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.fc1 = nn.Linear(64 * 7 * 7, 128)
         self.fc2 = nn.Linear(128, 10)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.pool = nn.MaxPool2d(2, 2)
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -24,7 +26,9 @@ class SimpleCNN(nn.Module):
         return x
 
 def train_model(model, train_loader, criterion, optimizer, epochs=5):
-    """Trains the CNN model on the given data loader."""
+    """
+    Trains the CNN model on the training dataset.
+    """
     model.train()
     for epoch in range(epochs):
         running_loss = 0.0
@@ -37,12 +41,17 @@ def train_model(model, train_loader, criterion, optimizer, epochs=5):
             running_loss += loss.item()
         print(f'Epoch [{epoch + 1}/{epochs}], Loss: {running_loss / len(train_loader):.4f}')
 
-if __name__ == '__main__':
+def main():
+    """
+    Main function to execute the training process.
+    """
     transform = transforms.Compose([transforms.ToTensor()])
     train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
     train_loader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True)
     model = SimpleCNN()
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    train_model(model, train_loader, criterion, optimizer, epochs=5)
-    print('Training complete.')
+    train_model(model, train_loader, criterion, optimizer)
+
+if __name__ == '__main__':
+    main()
