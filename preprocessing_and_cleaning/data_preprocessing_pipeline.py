@@ -2,36 +2,40 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+import torch
+from torch.utils.data import Dataset, DataLoader
 
+class CustomDataset(Dataset):
+    """Custom dataset for loading and preprocessing numerical data."""
+    def __init__(self, features, labels):
+        self.features = features
+        self.labels = labels
 
-def load_data(file_path):
-    """Loads data from a CSV file and returns a DataFrame."""
-    return pd.read_csv(file_path)
+    def __len__(self):
+        return len(self.labels)
 
+    def __getitem__(self, idx):
+        return self.features[idx], self.labels[idx]
 
-def preprocess_data(df):
-    """Preprocesses the DataFrame by filling missing values and scaling features."""
-    df.fillna(df.mean(), inplace=True)
+def preprocess_data(dataframe):
+    """Preprocesses the input dataframe by splitting and scaling data."""
+    features = dataframe.drop('target', axis=1).values
+    labels = dataframe['target'].values
+    features_train, features_test, labels_train, labels_test = train_test_split(features, labels, test_size=0.2, random_state=42)
     scaler = StandardScaler()
-    scaled_features = scaler.fit_transform(df.select_dtypes(include=[np.number]))
-    return pd.DataFrame(scaled_features, columns=df.select_dtypes(include=[np.number]).columns)
-
-
-def split_data(df, target_column, test_size=0.2):
-    """Splits the DataFrame into training and testing sets."""
-    X = df.drop(columns=[target_column])
-    y = df[target_column]
-    return train_test_split(X, y, test_size=test_size, random_state=42)
-
-
-def main():
-    """Main function to execute the data loading and preprocessing pipeline."""
-    file_path = 'mock_data.csv'
-    df = load_data(file_path)
-    processed_df = preprocess_data(df)
-    X_train, X_test, y_train, y_test = split_data(processed_df, target_column='target')
-    print(f'Training set size: {X_train.shape[0]}, Testing set size: {X_test.shape[0]}')
-
+    features_train = scaler.fit_transform(features_train)
+    features_test = scaler.transform(features_test)
+    return features_train, features_test, labels_train, labels_test
 
 if __name__ == '__main__':
-    main()
+    mock_data = pd.DataFrame({
+        'feature1': np.random.rand(100),
+        'feature2': np.random.rand(100),
+        'target': np.random.randint(0, 2, size=100)
+    })
+    features_train, features_test, labels_train, labels_test = preprocess_data(mock_data)
+    train_dataset = CustomDataset(torch.FloatTensor(features_train), torch.LongTensor(labels_train))
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    for batch in train_loader:
+        features, labels = batch
+        print(f'Batch features: {features}, Batch labels: {labels}')
