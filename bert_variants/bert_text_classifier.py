@@ -3,31 +3,48 @@ import torch.nn as nn
 from transformers import BertTokenizer, BertModel
 
 class BertTextClassifier(nn.Module):
-    """A simple BERT-based text classification model."""
+    """
+    A simple BERT-based text classifier.
+    """
     def __init__(self, num_classes):
         super(BertTextClassifier, self).__init__()
         self.bert = BertModel.from_pretrained('bert-base-uncased')
-        self.classifier = nn.Linear(self.bert.config.hidden_size, num_classes)
+        self.fc = nn.Linear(self.bert.config.hidden_size, num_classes)
 
     def forward(self, input_ids, attention_mask):
-        """Forward pass through the model."""
-        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        logits = self.classifier(outputs.pooler_output)
+        outputs = self.bert(input_ids, attention_mask=attention_mask)
+        logits = self.fc(outputs.last_hidden_state[:, 0, :])
         return logits
 
-def preprocess_data(texts):
-    """Tokenizes input texts and creates attention masks."""
+def preprocess_data(texts, labels):
+    """
+    Tokenizes and prepares the input data for BERT.
+    """
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    inputs = tokenizer(texts, padding=True, truncation=True, return_tensors='pt')
-    return inputs['input_ids'], inputs['attention_mask']
+    encodings = tokenizer(texts, truncation=True, padding=True, return_tensors='pt')
+    return encodings, torch.tensor(labels)
 
-def main():
-    texts = ['Hello, world!', 'BERT is a powerful model for NLP.']
-    input_ids, attention_mask = preprocess_data(texts)
-    model = BertTextClassifier(num_classes=2)
-    with torch.no_grad():
-        logits = model(input_ids, attention_mask)
-        print(logits)
+def train_model(model, dataloader, optimizer, device):
+    """
+    Trains the BERT model on the given data.
+    """
+    model.train()
+    for batch in dataloader:
+        optimizer.zero_grad()
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
+        labels = batch['labels'].to(device)
+        outputs = model(input_ids, attention_mask)
+        loss = nn.CrossEntropyLoss()(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        print(f'Training loss: {loss.item()}')
 
-if __name__ == '__main__':
-    main()
+texts = ['I love programming.', 'Deep learning is fascinating.']
+labels = [1, 1]
+encodings, labels_tensor = preprocess_data(texts, labels)
+dataset = torch.utils.data.TensorDataset(encodings['input_ids'], encodings['attention_mask'], labels_tensor)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=2)
+model = BertTextClassifier(num_classes=2)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+train_model(model, dataloader, optimizer, device='cpu')
