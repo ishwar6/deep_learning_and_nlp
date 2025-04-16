@@ -1,50 +1,44 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import models, datasets, transforms
+from torchvision import models, transforms
+from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
 
 class TransferLearningModel:
-    """
-    Class to implement a transfer learning model using a pre-trained ResNet.
-    """
-
     def __init__(self, num_classes):
         self.model = models.resnet18(pretrained=True)
+        for param in self.model.parameters():
+            param.requires_grad = False
         self.model.fc = nn.Linear(self.model.fc.in_features, num_classes)
-        self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
 
-    def train(self, dataloader, num_epochs=5):
-        """
-        Trains the model on the provided dataloader.
-        """
+    def get_model(self):
+        return self.model
+
+    def train(self, dataloader, epochs):
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(self.model.parameters())
         self.model.train()
-        for epoch in range(num_epochs):
-            running_loss = 0.0
+        for epoch in range(epochs):
             for inputs, labels in dataloader:
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 outputs = self.model(inputs)
-                loss = self.criterion(outputs, labels)
+                loss = criterion(outputs, labels)
                 loss.backward()
-                self.optimizer.step()
-                running_loss += loss.item()
-            print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {running_loss / len(dataloader):.4f}')
+                optimizer.step()
+            print(f'Epoch {epoch + 1}/{epochs}, Loss: {loss.item()}')
 
 def main():
-    """
-    Main function to execute training with mock data.
-    """
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
     ])
-
-    dataset = datasets.FakeData(transform=transform)
+    dataset = ImageFolder(root='path/to/data', transform=transform)
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-
-    model = TransferLearningModel(num_classes=10)
-    model.train(dataloader, num_epochs=5)
+    model = TransferLearningModel(num_classes=len(dataset.classes)).get_model()
+    model.train()  # Move model to training mode
+    trainer = TransferLearningModel(num_classes=len(dataset.classes))
+    trainer.train(dataloader, epochs=5)
 
 if __name__ == '__main__':
     main()
