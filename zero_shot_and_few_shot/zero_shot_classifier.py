@@ -1,26 +1,35 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from sklearn.metrics import accuracy_score
+import numpy as np
 
-class ZeroShotTextClassifier:
-    def __init__(self, model_name='gpt2'):
-        self.tokenizer = GPT2Tokenizer.from_pretrained(model_name)
-        self.model = GPT2LMHeadModel.from_pretrained(model_name)
-        self.model.eval()
+class ZeroShotClassifier:
+    def __init__(self, model_name):
+        """Initializes the ZeroShotClassifier with a specified model."""
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
 
-    def classify(self, text, labels):
-        input_ids = self.tokenizer.encode(text, return_tensors='pt')
+    def predict(self, texts, labels):
+        """Predicts the class labels for given texts using zero-shot classification."""
+        inputs = self.tokenizer(texts, return_tensors='pt', padding=True, truncation=True)
         with torch.no_grad():
-            outputs = self.model(input_ids)
-        logits = outputs.logits[:, -1, :]
-        probabilities = nn.functional.softmax(logits, dim=-1)
-        label_ids = self.tokenizer.encode(labels)
-        return {label: probabilities[0, id].item() for id in label_ids}
+            outputs = self.model(**inputs)
+        logits = outputs.logits
+        probabilities = torch.nn.functional.softmax(logits, dim=-1)
+        predictions = torch.argmax(probabilities, dim=-1)
+        return predictions.numpy(), probabilities.numpy()
+
+    def evaluate(self, texts, true_labels, labels):
+        """Evaluates the model's predictions against the true labels."""
+        predicted_labels, _ = self.predict(texts, labels)
+        accuracy = accuracy_score(true_labels, predicted_labels)
+        return accuracy
 
 if __name__ == '__main__':
-    classifier = ZeroShotTextClassifier()
-    text = 'I love programming in Python.'
-    labels = ['positive', 'negative', 'neutral']
-    results = classifier.classify(text, labels)
-    print('Classification Results:', results)
+    model_name = 'facebook/bart-large-mnli'
+    classifier = ZeroShotClassifier(model_name)
+    sample_texts = ['I love programming in Python.', 'The weather is great today.']
+    sample_labels = ['programming', 'weather']
+    true_labels = [0, 1]
+    accuracy = classifier.evaluate(sample_texts, true_labels, sample_labels)
+    print(f'Accuracy: {accuracy:.2f}')
