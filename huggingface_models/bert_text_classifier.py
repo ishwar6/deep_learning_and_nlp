@@ -1,44 +1,41 @@
+import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
 from transformers import BertTokenizer, BertForSequenceClassification
-from sklearn.model_selection import train_test_split
-from sklearn.datasets import fetch_20newsgroups
+from transformers import AdamW
 
-class TextClassifier:
-    def __init__(self, model_name='bert-base-uncased', num_labels=20):
-        self.tokenizer = BertTokenizer.from_pretrained(model_name)
-        self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
+class TextDataset(Dataset):
+    """Custom Dataset for loading text data."""
+    def __init__(self, texts, labels):
+        self.texts = texts
+        self.labels = labels
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-    def preprocess_data(self, texts):
-        return self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt')
+    def __len__(self):
+        return len(self.texts)
 
-    def train(self, texts, labels, epochs=3, batch_size=8):
-        self.model.train()
-        optimizer = optim.AdamW(self.model.parameters(), lr=5e-5)
-        inputs = self.preprocess_data(texts)
-        for epoch in range(epochs):
-            for i in range(0, len(texts), batch_size):
-                optimizer.zero_grad()
-                batch_inputs = {key: val[i:i + batch_size] for key, val in inputs.items()}
-                outputs = self.model(**batch_inputs, labels=batch_inputs['input_ids'])
-                loss = outputs.loss
-                loss.backward()
-                optimizer.step()
-                print(f'Epoch {epoch + 1}, Batch {i // batch_size + 1}, Loss: {loss.item()}')
+    def __getitem__(self, idx):
+        encoding = self.tokenizer(self.texts[idx], return_tensors='pt', padding=True, truncation=True, max_length=128)
+        return { 'input_ids': encoding['input_ids'][0], 'attention_mask': encoding['attention_mask'][0], 'labels': torch.tensor(self.labels[idx], dtype=torch.long) }
 
-    def evaluate(self, texts):
-        self.model.eval()
-        with torch.no_grad():
-            inputs = self.preprocess_data(texts)
-            outputs = self.model(**inputs)
-            predictions = torch.argmax(outputs.logits, dim=-1)
-            return predictions.tolist()
+def train_model(dataset, batch_size=8, epochs=3):
+    """Function to train the BERT model on the given dataset."""
+    model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=2)
+    model.train()
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    optimizer = AdamW(model.parameters(), lr=1e-5)
+
+    for epoch in range(epochs):
+        for batch in dataloader:
+            optimizer.zero_grad()
+            outputs = model(input_ids=batch['input_ids'], attention_mask=batch['attention_mask'], labels=batch['labels'])
+            loss = outputs.loss
+            loss.backward()
+            optimizer.step()
+            print(f'Epoch: {epoch + 1}, Loss: {loss.item()}')
 
 if __name__ == '__main__':
-    data = fetch_20newsgroups(subset='train')
-    classifier = TextClassifier()
-    classifier.train(data.data, data.target)
-    sample_texts = data.data[:5]
-    predictions = classifier.evaluate(sample_texts)
-    print('Predictions for sample texts:', predictions)
+    texts = ['I love programming.', 'Deep learning is fascinating!', 'Hugging Face makes NLP easy.']
+    labels = [1, 1, 1]
+    dataset = TextDataset(texts, labels)
+    train_model(dataset)
