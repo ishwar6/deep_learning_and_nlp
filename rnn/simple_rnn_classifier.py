@@ -1,13 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
+import numpy as np
 
-class SimpleRNN(nn.Module):
-    """A simple RNN model for sequence classification."""
+class RNNModel(nn.Module):
+    """
+    A simple RNN model for sequence classification.
+    """
     def __init__(self, input_size, hidden_size, output_size):
-        super(SimpleRNN, self).__init__()
+        super(RNNModel, self).__init__()
         self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
 
@@ -16,35 +17,33 @@ class SimpleRNN(nn.Module):
         out = self.fc(rnn_out[:, -1, :])
         return out
 
-def train_rnn_model(model, train_loader, criterion, optimizer, epochs=5):
-    """Trains the RNN model on the provided data loader."""
-    model.train()
-    for epoch in range(epochs):
-        for inputs, labels in train_loader:
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-        print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
+def generate_mock_data(num_samples, seq_length, input_size):
+    """
+    Generates random mock data for testing the RNN model.
+    """  
+    return torch.randn(num_samples, seq_length, input_size), torch.randint(0, 2, (num_samples,))
 
-def main():
-    """Main function to set up data and run training."""
-    input_size = 28
-    hidden_size = 64
-    output_size = 10
-    batch_size = 32
-    epochs = 5
-
-    transform = transforms.Compose([transforms.ToTensor()])
-    train_dataset = datasets.FashionMNIST(root='./data', train=True, download=True, transform=transform)
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-
-    model = SimpleRNN(input_size, hidden_size, output_size)
+def train_model(model, data, labels, num_epochs=100, learning_rate=0.001):
+    """
+    Trains the RNN model using the provided data and labels.
+    """  
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    for epoch in range(num_epochs):
+        model.train()
+        optimizer.zero_grad()
+        outputs = model(data)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
 
-    train_rnn_model(model, train_loader, criterion, optimizer, epochs)
-
-if __name__ == '__main__':
-    main()
+input_size = 10
+hidden_size = 20
+output_size = 2
+num_samples = 100
+seq_length = 5
+mock_data, mock_labels = generate_mock_data(num_samples, seq_length, input_size)
+model = RNNModel(input_size, hidden_size, output_size)
+train_model(model, mock_data, mock_labels)
