@@ -1,32 +1,45 @@
 import torch
 import torch.nn as nn
-from transformers import BertTokenizer, BertModel
+from transformers import BertTokenizer, BertForSequenceClassification
+from sklearn.model_selection import train_test_split
+from sklearn.datasets import fetch_20newsgroups
 
-class MultilingualNLPModel(nn.Module):
-    """A simple multilingual NLP model using BERT for sentence embeddings."""
-    def __init__(self):
-        super(MultilingualNLPModel, self).__init__()
-        self.bert = BertModel.from_pretrained('bert-base-multilingual-cased')
-        self.fc = nn.Linear(self.bert.config.hidden_size, 2)
+class MultilingualNLPModel:
+    def __init__(self, model_name='bert-base-multilingual-cased', num_labels=20):
+        self.tokenizer = BertTokenizer.from_pretrained(model_name)
+        self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
 
-    def forward(self, input_ids, attention_mask):
-        """Forward pass to get predictions from the model."""
-        outputs = self.bert(input_ids, attention_mask=attention_mask)
-        pooled_output = outputs['pooler_output']
-        return self.fc(pooled_output)
+    def preprocess_data(self, texts):
+        return self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt')
 
-def tokenize_sentences(sentences):
-    """Tokenizes input sentences using a multilingual BERT tokenizer."""
-    tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
-    return tokenizer(sentences, padding=True, truncation=True, return_tensors='pt')
+    def train(self, texts, labels, epochs=3, batch_size=8):
+        self.model.train()
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=5e-5)
+        for epoch in range(epochs):
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i + batch_size]
+                batch_labels = labels[i:i + batch_size]
+                inputs = self.preprocess_data(batch_texts)
+                outputs = self.model(**inputs, labels=batch_labels)
+                loss = outputs.loss
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+                print(f'Epoch {epoch + 1}, Batch {i // batch_size + 1}, Loss: {loss.item()}')
 
-def main():
-    sentences = ["Hello, how are you?", "Bonjour, comment ça va?"]
-    tokens = tokenize_sentences(sentences)
-    model = MultilingualNLPModel()
-    with torch.no_grad():
-        predictions = model(tokens['input_ids'], tokens['attention_mask'])
-    print(predictions)
+    def predict(self, texts):
+        self.model.eval()
+        with torch.no_grad():
+            inputs = self.preprocess_data(texts)
+            outputs = self.model(**inputs)
+            predictions = torch.argmax(outputs.logits, dim=-1)
+            return predictions.tolist()
 
 if __name__ == '__main__':
-    main()
+    data = fetch_20newsgroups(subset='all')
+    texts = data.data[:100]
+    labels = data.target[:100]
+    model = MultilingualNLPModel()
+    model.train(texts, labels)
+    predictions = model.predict(texts)
+    print(predictions)
