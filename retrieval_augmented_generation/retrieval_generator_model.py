@@ -1,29 +1,34 @@
-import numpy as np
 import torch
 import torch.nn as nn
+import torch.optim as optim
 from transformers import BertTokenizer, BertModel
 
-class RetrievalAugmentedGenerator:
-    def __init__(self, model_name='bert-base-uncased'):
-        """Initialize the RetrievalAugmentedGenerator with a pre-trained BERT model."""
-        self.tokenizer = BertTokenizer.from_pretrained(model_name)
-        self.model = BertModel.from_pretrained(model_name)
+class RetrievalAugmentedGenerator(nn.Module):
+    """Model that combines a BERT encoder with a simple output layer for text generation."""
+    def __init__(self):
+        super(RetrievalAugmentedGenerator, self).__init__()
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.fc = nn.Linear(self.bert.config.hidden_size, 1)
 
-    def encode_text(self, text):
-        """Tokenizes and encodes the input text using BERT."""
-        inputs = self.tokenizer(text, return_tensors='pt', padding=True, truncation=True)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-        return outputs.last_hidden_state.mean(dim=1)
+    def forward(self, input_ids, attention_mask):
+        """Forward pass through the model."""
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        logits = self.fc(outputs.last_hidden_state[:, 0, :])
+        return torch.sigmoid(logits)
 
-    def generate_response(self, query):
-        """Generates a response based on the query using retrieval augmented generation."""
-        encoded_query = self.encode_text(query)
-        response = f'Retrieved response for: {query}'  # Placeholder for actual logic
-        return response
+def generate_mock_data(num_samples=5):
+    """Generates mock input data for testing the model."""
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    texts = ["This is a sample input text." for _ in range(num_samples)]
+    inputs = tokenizer(texts, return_tensors='pt', padding=True, truncation=True)
+    return inputs['input_ids'], inputs['attention_mask']
+
+def main():
+    """Main function to initialize the model and run a forward pass with mock data."""
+    model = RetrievalAugmentedGenerator()
+    input_ids, attention_mask = generate_mock_data()
+    outputs = model(input_ids, attention_mask)
+    print(outputs)
 
 if __name__ == '__main__':
-    rag = RetrievalAugmentedGenerator()
-    query = 'What are the benefits of deep learning?'
-    response = rag.generate_response(query)
-    print(response)
+    main()
