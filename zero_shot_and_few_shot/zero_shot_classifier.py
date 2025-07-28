@@ -1,35 +1,32 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from sklearn.metrics import accuracy_score
-import numpy as np
+import torch.nn as nn
+from transformers import BertTokenizer, BertModel
 
-class ZeroShotClassifier:
-    def __init__(self, model_name):
-        """Initializes the ZeroShotClassifier with a specified model."""
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
+class ZeroShotClassifier(nn.Module):
+    """A model for zero-shot text classification using BERT."""
+    def __init__(self):
+        super(ZeroShotClassifier, self).__init__()
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.classifier = nn.Linear(self.bert.config.hidden_size, 1)
 
-    def predict(self, texts, labels):
-        """Predicts the class labels for given texts using zero-shot classification."""
-        inputs = self.tokenizer(texts, return_tensors='pt', padding=True, truncation=True)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-        logits = outputs.logits
-        probabilities = torch.nn.functional.softmax(logits, dim=-1)
-        predictions = torch.argmax(probabilities, dim=-1)
-        return predictions.numpy(), probabilities.numpy()
+    def forward(self, input_ids, attention_mask):
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        logits = self.classifier(outputs.pooler_output)
+        return logits
 
-    def evaluate(self, texts, true_labels, labels):
-        """Evaluates the model's predictions against the true labels."""
-        predicted_labels, _ = self.predict(texts, labels)
-        accuracy = accuracy_score(true_labels, predicted_labels)
-        return accuracy
+def classify_text(text, candidate_labels):
+    """Classifies the input text into candidate labels using zero-shot learning."""
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    model = ZeroShotClassifier()
+    model.eval()
+    inputs = tokenizer(text, return_tensors='pt')
+    with torch.no_grad():
+        logits = model(inputs['input_ids'], inputs['attention_mask'])
+    probabilities = torch.sigmoid(logits).squeeze().numpy()
+    return {label: probabilities[i] for i, label in enumerate(candidate_labels)}
 
 if __name__ == '__main__':
-    model_name = 'facebook/bart-large-mnli'
-    classifier = ZeroShotClassifier(model_name)
-    sample_texts = ['I love programming in Python.', 'The weather is great today.']
-    sample_labels = ['programming', 'weather']
-    true_labels = [0, 1]
-    accuracy = classifier.evaluate(sample_texts, true_labels, sample_labels)
-    print(f'Accuracy: {accuracy:.2f}')
+    text = "This is a great movie!"
+    candidate_labels = ["positive", "negative"]
+    results = classify_text(text, candidate_labels)
+    print(results)
