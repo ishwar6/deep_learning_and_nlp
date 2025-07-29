@@ -1,56 +1,71 @@
-import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+import torch.nn as nn
+import torch.optim as optim
 from transformers import BertTokenizer, BertForSequenceClassification
 from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Dataset
 
 class TextDataset(Dataset):
-    """
-    Custom dataset for text classification.
-    """
-    def __init__(self, texts, labels):
+    """Custom dataset for loading text data."""
+    def __init__(self, texts, labels, tokenizer, max_length):
         self.texts = texts
         self.labels = labels
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.tokenizer = tokenizer
+        self.max_length = max_length
 
     def __len__(self):
         return len(self.texts)
 
     def __getitem__(self, idx):
-        encoding = self.tokenizer(self.texts[idx], padding='max_length', truncation=True, return_tensors='pt')
+        text = self.texts[idx]
+        label = self.labels[idx]
+        encoding = self.tokenizer.encode_plus(
+            text,
+            add_special_tokens=True,
+            max_length=self.max_length,
+            return_token_type_ids=False,
+            padding='max_length',
+            return_attention_mask=True,
+            return_tensors='pt',
+            truncation=True
+        )
         return {
             'input_ids': encoding['input_ids'].flatten(),
             'attention_mask': encoding['attention_mask'].flatten(),
-            'labels': torch.tensor(self.labels[idx], dtype=torch.long)
+            'labels': torch.tensor(label, dtype=torch.long)
         }
 
-def train_model(train_texts, train_labels, epochs=3, batch_size=16):
-    """
-    Train a BERT model on the given texts and labels.
-    """
-    model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=len(set(train_labels)))
-    dataset = TextDataset(train_texts, train_labels)
-    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
-    model.train()
+def train_model(model, data_loader, optimizer, device):
+    """Train the model using the provided data loader."""
+    model = model.train()
+    total_loss = 0
+    for batch in data_loader:
+        optimizer.zero_grad()
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
+        labels = batch['labels'].to(device)
+        outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
+        loss = outputs[0]
+        total_loss += loss.item()
+        loss.backward()
+        optimizer.step()
+    return total_loss / len(data_loader)
 
-    for epoch in range(epochs):
-        total_loss = 0
-        for batch in train_loader:
-            optimizer.zero_grad()
-            outputs = model(
-                input_ids=batch['input_ids'],
-                attention_mask=batch['attention_mask'],
-                labels=batch['labels']
-            )
-            loss = outputs.loss
-            total_loss += loss.item()
-            loss.backward()
-            optimizer.step()
-        print(f'Epoch {epoch + 1}/{epochs}, Loss: {total_loss / len(train_loader)}')
+def main():
+    """Main function to execute training on a sample dataset."""
+    texts = ["I love programming in Python!", "Deep learning is fascinating.", "Natural language processing is a key area of AI."]
+    labels = [1, 1, 1]
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    max_length = 32
+    train_texts, val_texts, train_labels, val_labels = train_test_split(texts, labels, test_size=0.2)
+    train_dataset = TextDataset(train_texts, train_labels, tokenizer, max_length)
+    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
+    model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=2)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-5)
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    model = model.to(device)
+    average_loss = train_model(model, train_loader, optimizer, device)
+    print(f'Training loss: {average_loss}')
 
 if __name__ == '__main__':
-    texts = ["I love programming!", "Deep learning is fascinating.", "Python is my favorite language.", "NLP is amazing.", "Artificial Intelligence is the future."]
-    labels = [1, 1, 1, 1, 0]
-    train_texts, _, train_labels, _ = train_test_split(texts, labels, test_size=0.2, random_state=42)
-    train_model(train_texts, train_labels)
+    main()
