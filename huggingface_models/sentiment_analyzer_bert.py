@@ -1,47 +1,43 @@
-import numpy as np
 import torch
-from torch import nn
-from transformers import BertTokenizer, BertForSequenceClassification
-from transformers import Trainer, TrainingArguments
+import torch.nn as nn
+from transformers import BertTokenizer, BertModel
 
-class SentimentAnalyzer:
-    def __init__(self, model_name='bert-base-uncased'):
-        """Initializes the sentiment analyzer with a BERT model and tokenizer."""
-        self.tokenizer = BertTokenizer.from_pretrained(model_name)
-        self.model = BertForSequenceClassification.from_pretrained(model_name)
+class SentimentAnalyzer(nn.Module):
+    """
+    A sentiment analysis model based on BERT architecture.
+    """
+    def __init__(self):
+        super(SentimentAnalyzer, self).__init__()
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.fc = nn.Linear(self.bert.config.hidden_size, 2)
 
-    def tokenize_data(self, texts, max_length=128):
-        """Tokenizes input texts and returns input IDs and attention masks."""
-        return self.tokenizer(texts, padding=True, truncation=True, max_length=max_length, return_tensors='pt')
+    def forward(self, input_ids, attention_mask):
+        """
+        Forward pass through the model.
+        """
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        logits = self.fc(outputs.pooler_output)
+        return logits
 
-    def train(self, train_texts, train_labels):
-        """Prepares and trains the model on the given texts and labels."""
-        train_encodings = self.tokenize_data(train_texts)
-        train_dataset = torch.utils.data.TensorDataset(train_encodings['input_ids'], train_encodings['attention_mask'], torch.tensor(train_labels))
-        training_args = TrainingArguments(
-            output_dir='./results',
-            num_train_epochs=3,
-            per_device_train_batch_size=8,
-            logging_dir='./logs',
-        )
-        trainer = Trainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=train_dataset
-        )
-        trainer.train()
+def preprocess_data(sentences):
+    """
+    Preprocess sentences for BERT tokenization.
+    """
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    inputs = tokenizer(sentences, return_tensors='pt', padding=True, truncation=True)
+    return inputs['input_ids'], inputs['attention_mask']
 
-    def predict(self, texts):
-        """Makes predictions for the input texts and returns class probabilities."""
-        with torch.no_grad():
-            encodings = self.tokenize_data(texts)
-            outputs = self.model(encodings['input_ids'], attention_mask=encodings['attention_mask'])
-            return torch.softmax(outputs.logits, dim=-1)
+def main():
+    """
+    Main function to run sentiment analysis on sample sentences.
+    """
+    sample_sentences = ["I love this product!", "This is the worst service ever."]
+    input_ids, attention_mask = preprocess_data(sample_sentences)
+    model = SentimentAnalyzer()
+    with torch.no_grad():
+        outputs = model(input_ids, attention_mask)
+        predictions = torch.argmax(outputs, dim=1)
+    print("Predictions:", predictions.numpy())
 
 if __name__ == '__main__':
-    analyzer = SentimentAnalyzer()
-    mock_texts = ['I love this!', 'This is terrible.']
-    mock_labels = [1, 0]
-    analyzer.train(mock_texts, mock_labels)
-    predictions = analyzer.predict(mock_texts)
-    print(predictions)
+    main()
