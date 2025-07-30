@@ -1,54 +1,66 @@
 import torch
-from transformers import BertTokenizer, BertForSequenceClassification, Trainer, TrainingArguments
+import torch.nn as nn
+import torch.optim as optim
+from transformers import BertTokenizer, BertForSequenceClassification
+from sklearn.model_selection import train_test_split
 from sklearn.datasets import fetch_20newsgroups
-import numpy as np
+from torch.utils.data import DataLoader, Dataset
 
+class TextDataset(Dataset):
+    def __init__(self, texts, labels, tokenizer, max_len):
+        self.texts = texts
+        self.labels = labels
+        self.tokenizer = tokenizer
+        self.max_len = max_len
 
-def load_data():
-    """
-    Load and preprocess the 20 Newsgroups dataset.
-    """
-    newsgroups = fetch_20newsgroups(subset='train')
-    return newsgroups.data, newsgroups.target
+    def __len__(self):
+        return len(self.texts)
 
+    def __getitem__(self, idx):
+        text = self.texts[idx]
+        label = self.labels[idx]
+        encoding = self.tokenizer.encode_plus(
+            text,
+            add_special_tokens=True,
+            max_length=self.max_len,
+            return_token_type_ids=False,
+            padding='max_length',
+            truncation=True,
+            return_attention_mask=True,
+            return_tensors='pt'
+        )
+        return {
+            'input_ids': encoding['input_ids'].flatten(),
+            'attention_mask': encoding['attention_mask'].flatten(),
+            'labels': torch.tensor(label, dtype=torch.long)
+        }
 
-def tokenize_data(sentences):
-    """
-    Tokenize the input sentences using BERT's tokenizer.
-    """
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    return tokenizer(sentences, padding=True, truncation=True, return_tensors='pt')
-
-
-def train_model(train_texts, train_labels):
-    """
-    Train a BERT model for sequence classification.
-    """
-    model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=20)
-    tokens = tokenize_data(train_texts)
-    training_args = TrainingArguments(
-        output_dir='./results',
-        num_train_epochs=2,
-        per_device_train_batch_size=8,
-        logging_dir='./logs',
-    )
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=torch.utils.data.TensorDataset(tokens['input_ids'], tokens['attention_mask'], torch.tensor(train_labels))
-    )
-    trainer.train()
-    return model
-
-
-def main():
-    """
-    Main function to execute fine-tuning on BERT model.
-    """
-    texts, labels = load_data()
-    model = train_model(texts, labels)
-    print('Model trained successfully!')
-
+def train_model(model, dataloader, optimizer, device, epochs=3):
+    model = model.train()
+    for epoch in range(epochs):
+        for batch in dataloader:
+            optimizer.zero_grad()
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['labels'].to(device)
+            outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
+            loss = outputs.loss
+            loss.backward()
+            optimizer.step()
+        print(f'Epoch {epoch + 1}/{epochs}, Loss: {loss.item()}')
 
 if __name__ == '__main__':
-    main()
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=20)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+
+    newsgroups_data = fetch_20newsgroups(subset='train')
+    texts, labels = newsgroups_data.data, newsgroups_data.target
+    texts_train, texts_val, labels_train, labels_val = train_test_split(texts, labels, test_size=0.2)
+    train_dataset = TextDataset(texts_train, labels_train, tokenizer, max_len=128)
+    train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+
+    optimizer = optim.AdamW(model.parameters(), lr=2e-5)
+    train_model(model, train_dataloader, optimizer, device)
+    print('Training complete.')
