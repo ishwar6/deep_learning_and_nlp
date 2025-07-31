@@ -6,50 +6,49 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 class SimpleNN(nn.Module):
-    """A simple feedforward neural network for binary classification."""
-    def __init__(self, input_size):
+    def __init__(self, input_size, hidden_size, output_size):
         super(SimpleNN, self).__init__()
-        self.fc1 = nn.Linear(input_size, 16)
-        self.fc2 = nn.Linear(16, 1)
-        self.activation = nn.Sigmoid()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = self.activation(self.fc2(x))
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
         return x
 
-def train_model(X_train, y_train, input_size):
-    """Trains the neural network model on the provided training data."""
-    model = SimpleNN(input_size)
-    criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
-    X_train_tensor = torch.FloatTensor(X_train)
-    y_train_tensor = torch.FloatTensor(y_train).view(-1, 1)
+def generate_data():
+    X, y = make_classification(n_samples=1000, n_features=20, n_classes=2, random_state=42)
+    return train_test_split(X, y, test_size=0.2, random_state=42)
 
-    for epoch in range(100):
-        model.train()
-        optimizer.zero_grad()
-        outputs = model(X_train_tensor)
-        loss = criterion(outputs, y_train_tensor)
-        loss.backward()
-        optimizer.step()
-        if (epoch + 1) % 10 == 0:
-            print(f'Epoch [{epoch + 1}/100], Loss: {loss.item():.4f}')
-    return model
-
-def main():
-    """Main function to create a synthetic dataset and train the model."""
-    X, y = make_classification(n_samples=1000, n_features=20, n_informative=10, n_redundant=5, random_state=42)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+def preprocess_data(X_train, X_test):
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
-    model = train_model(X_train, y_train, input_size=X_train.shape[1])
-    test_tensor = torch.FloatTensor(X_test)
-    with torch.no_grad():
-        test_outputs = model(test_tensor)
-        predicted = (test_outputs.numpy() > 0.5).astype(int)
-    print(predicted)
+    return X_train, X_test
+
+def train_model(model, criterion, optimizer, X_train, y_train, epochs=100):
+    model.train()
+    for epoch in range(epochs):
+        inputs = torch.FloatTensor(X_train)
+        labels = torch.LongTensor(y_train)
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}')
+
+def main():
+    X_train, X_test, y_train, y_test = generate_data()
+    X_train, X_test = preprocess_data(X_train, X_test)
+    model = SimpleNN(input_size=20, hidden_size=10, output_size=2)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    train_model(model, criterion, optimizer, X_train, y_train)
+    print('Training complete.')
 
 if __name__ == '__main__':
     main()
