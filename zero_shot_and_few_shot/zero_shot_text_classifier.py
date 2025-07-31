@@ -2,12 +2,13 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from transformers import BertTokenizer, BertForSequenceClassification
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
 class ZeroShotClassifier:
-    def __init__(self, model_name='bert-base-uncased', num_labels=2):
+    def __init__(self, model_name='bert-base-uncased'):
         self.tokenizer = BertTokenizer.from_pretrained(model_name)
-        self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
+        self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=3)
 
     def preprocess(self, texts):
         return self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt')
@@ -15,16 +16,14 @@ class ZeroShotClassifier:
     def predict(self, texts):
         inputs = self.preprocess(texts)
         with torch.no_grad():
-            logits = self.model(**inputs).logits
-        return torch.argmax(logits, dim=1)
-
-    def evaluate(self, texts, labels):
-        predictions = self.predict(texts)
-        return accuracy_score(labels, predictions.numpy())
+            outputs = self.model(**inputs)
+        return torch.argmax(outputs.logits, dim=1).numpy()
 
 if __name__ == '__main__':
+    texts = ["The movie was fantastic!", "I did not enjoy the play.", "What a great film!"]
+    labels = [2, 0, 2]  # 0: Negative, 1: Neutral, 2: Positive
     classifier = ZeroShotClassifier()
-    sample_texts = ['I love deep learning.', 'This is a bad product.']
-    sample_labels = [1, 0]
-    accuracy = classifier.evaluate(sample_texts, sample_labels)
+    predictions = classifier.predict(texts)
+    accuracy = accuracy_score(labels, predictions)
+    print(f'Predicted labels: {predictions}')
     print(f'Accuracy: {accuracy:.2f}')
