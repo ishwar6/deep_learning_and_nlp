@@ -3,24 +3,20 @@ from transformers import BertTokenizer, BertForQuestionAnswering
 from transformers import pipeline
 
 class QuestionAnsweringModel:
-    def __init__(self):
-        """Initializes the question answering model and tokenizer."""
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        self.model = BertForQuestionAnswering.from_pretrained('bert-base-uncased')
+    def __init__(self, model_name='bert-base-uncased'):
+        """Initializes the Question Answering model with the specified model name."""
+        self.tokenizer = BertTokenizer.from_pretrained(model_name)
+        self.model = BertForQuestionAnswering.from_pretrained(model_name)
+        self.qa_pipeline = pipeline('question-answering', model=self.model, tokenizer=self.tokenizer)
 
     def answer_question(self, question, context):
-        """Generates an answer to a question based on the provided context."""
-        inputs = self.tokenizer(question, context, return_tensors='pt')
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-        answer_start = torch.argmax(outputs.start_logits)
-        answer_end = torch.argmax(outputs.end_logits) + 1
-        answer = self.tokenizer.convert_tokens_to_string(self.tokenizer.convert_ids_to_tokens(inputs['input_ids'][0][answer_start:answer_end]))
-        return answer
+        """Returns the answer to a question based on the provided context."""
+        result = self.qa_pipeline(question=question, context=context)
+        return result['answer']
 
 if __name__ == '__main__':
-    context = "Transformers are a type of model architecture that is particularly effective for NLP tasks."
-    question = "What are transformers?"
+    context = "The capital of France is Paris. Paris is known for its art, fashion, and culture."
+    question = "What is the capital of France?"
     qa_model = QuestionAnsweringModel()
     answer = qa_model.answer_question(question, context)
     print(f'Question: {question}\nAnswer: {answer}')
